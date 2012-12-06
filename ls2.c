@@ -105,32 +105,56 @@ char *filemode(int mode)
 	return bits;
 }
 
-void show_file_info(char *filename,struct stat *info_p)
+void show_file_info(char *filename,struct stat *info_p,int maxlength)
 /*
  * display the info about 'filename'.  The info is stored in struct at *info_p
  */
 {
 	char	*uid_to_name(short uid),*gid_to_name(short gid),*filemode(int mode);
 
+    struct tm *mtime = gmtime(&info_p->st_mtime);
 	printf("%s ",filemode(info_p->st_mode));
 	printf("%d ",(int) info_p->st_nlink);	/* links */
 	printf("%s ",uid_to_name(info_p->st_uid));
 	printf("%s ",gid_to_name(info_p->st_gid));
-	printf("%ld ",(long)info_p->st_size);	/* size  */
-    struct tm *mtime = gmtime(&info_p->st_mtime);
+	printf("%*ld ",maxlength,(long)info_p->st_size);	/* size  */
 	printf("%d-%02d-%02d ",(mtime->tm_year) + 1900,(mtime->tm_mon) + 1,mtime->tm_mday);
 	printf("%02d:%02d ",mtime->tm_hour,mtime->tm_min);
 	printf("%s \n",filename);			/* print name	 */
 }
 
-void do_stat(char *filename)
+void do_stat(struct dirent **entrylist,int size)
 {
-	struct stat info;
-
-	if (stat(filename,&info) == -1)		/* cannot stat	 */
-        perror(filename);			/* say why	 */
-	else					/* else show info	 */
-        show_file_info(filename,&info);
+    long maxsize = 0,cur = 0;
+    int length = 0;
+    char *filename;
+    for (int i = 0;i < size;i++)
+    {
+        struct stat info;
+        filename = entrylist[i]->d_name;
+        if (stat(filename,&info) == -1)
+            perror(filename);
+        else
+        {
+            cur = (long)(&info)->st_size;
+            if (cur > maxsize)
+                maxsize = cur;
+        }
+    }
+    while (maxsize)
+    {
+        length++;
+        maxsize /= 10;
+    }
+    for (int i = 0;i < size;i++)
+    {
+        struct stat info;
+        filename = entrylist[i]->d_name;
+        if (stat(filename,&info) == -1)
+            perror(filename);
+        else
+            show_file_info(filename,&info,length);
+    }
 }
 
 void do_ls(char *dirname,int mode)
@@ -166,15 +190,13 @@ void do_ls(char *dirname,int mode)
             }
         }
         qsort(entrylist,index,sizeof(entrylist[0]),dir_cmp);
-        for (int i = 0;i < index;i++)
-        {
-            if (mode == 0)
+        if (mode == 0)
+            for (int i = 0;i < index;i++)
                 printf("%s\n",entrylist[i]->d_name);
-            else
-            {
-                chdir(dirname);
-                do_stat(entrylist[i]->d_name);
-            }
+        else
+        {
+            chdir(dirname);
+            do_stat(entrylist,index);
         }
 		closedir(dir_ptr);
 	}
