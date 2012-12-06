@@ -105,7 +105,7 @@ char *filemode(int mode)
 	return bits;
 }
 
-void show_file_info(char *filename,struct stat *info_p,int maxlength)
+void show_file_info(char *filename,struct stat *info_p,int maxlink,int maxsize)
 /*
  * display the info about 'filename'.  The info is stored in struct at *info_p
  */
@@ -114,21 +114,21 @@ void show_file_info(char *filename,struct stat *info_p,int maxlength)
 
     struct tm *mtime = gmtime(&info_p->st_mtime);
 	printf("%s ",filemode(info_p->st_mode));
-	printf("%d ",(int) info_p->st_nlink);	/* links */
+	printf("%*d ",maxlink,(int)info_p->st_nlink);	/* links */
 	printf("%s ",uid_to_name(info_p->st_uid));
 	printf("%s ",gid_to_name(info_p->st_gid));
-	printf("%*ld ",maxlength,(long)info_p->st_size);	/* size  */
+	printf("%*ld ",maxsize,(long)info_p->st_size);	/* size  */
 	printf("%d-%02d-%02d ",(mtime->tm_year) + 1900,(mtime->tm_mon) + 1,mtime->tm_mday);
 	printf("%02d:%02d ",mtime->tm_hour,mtime->tm_min);
 	printf("%s \n",filename);			/* print name	 */
 }
 
-void do_stat(struct dirent **entrylist,int size)
+void do_stat(struct dirent **entrylist,int index)
 {
-    long maxsize = 0,cur = 0;
-    int length = 0;
+    long maxlink = 0,maxsize = 0,curl = 0,curs = 0;
+    int link = 0,size = 0;
     char *filename;
-    for (int i = 0;i < size;i++)
+    for (int i = 0;i < index;i++)
     {
         struct stat info;
         filename = entrylist[i]->d_name;
@@ -136,24 +136,32 @@ void do_stat(struct dirent **entrylist,int size)
             perror(filename);
         else
         {
-            cur = (long)(&info)->st_size;
-            if (cur > maxsize)
-                maxsize = cur;
+            curl = (int)(&info)->st_nlink;
+            curs = (long)(&info)->st_size;
+            if (curl > maxlink)
+                maxlink = curl;
+            if (curs > maxsize)
+                maxsize = curs;
         }
+    }
+    while (maxlink)
+    {
+        link++;
+        maxlink /= 10;
     }
     while (maxsize)
     {
-        length++;
+        size++;
         maxsize /= 10;
     }
-    for (int i = 0;i < size;i++)
+    for (int i = 0;i < index;i++)
     {
         struct stat info;
         filename = entrylist[i]->d_name;
         if (stat(filename,&info) == -1)
             perror(filename);
         else
-            show_file_info(filename,&info,length);
+            show_file_info(filename,&info,link,size);
     }
 }
 
@@ -191,8 +199,12 @@ void do_ls(char *dirname,int mode)
         }
         qsort(entrylist,index,sizeof(entrylist[0]),dir_cmp);
         if (mode == 0)
-            for (int i = 0;i < index;i++)
-                printf("%s\n",entrylist[i]->d_name);
+        {
+            for (int i = 0;i < index - 1;i++)
+                printf("%s  ",entrylist[i]->d_name);
+            if (index > 0)
+                printf("%s\n",entrylist[index - 1]->d_name);
+        }
         else
         {
             chdir(dirname);
@@ -229,6 +241,8 @@ int main(int argc, char *argv[])
                             continue;
                         printf("%s:\n",*argv);
                         do_ls(*argv,1);
+                        if (argc > 1)
+                            printf("\n");
                     }
                 opt_count++;
                 break;
@@ -244,6 +258,8 @@ int main(int argc, char *argv[])
                             continue;
                         printf("%s:\n",*argv);
                         do_ls(*argv,0);
+                        if (argc > 1)
+                            printf("\n");
                     }
                 }
                 break;
