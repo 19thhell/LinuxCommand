@@ -65,6 +65,7 @@ int main (int argc, char* argv[])
                  case -1:    /* Done with options.  */
                    break;
                  default:    /* Something else: unexpected.  */
+                   printf("1");
                    abort ();
                  };
               /*printf("%s\n", nextchar);*/
