@@ -193,11 +193,12 @@ int get_row(struct dirent **entrylist,int n,int minlen)
 
 void print_list(struct dirent **entrylist,int n,int row)
 {
-    int col = (n - 1) / row + 1,total = 0,curl,maxlen,inlen,outlen,p;
+    int col = (n - 1) / row + 1,total = 0,curl,inlen,outlen,p;
+    int maxlen[col];
     for (int i = 0;i < col;i++)
     {
         curl = 0;
-        maxlen = 0;
+        maxlen[i] = 0;
         for (int j = 0;j < row;j++)
         {
             p = i * row + j;
@@ -210,31 +211,32 @@ void print_list(struct dirent **entrylist,int n,int row)
                 char *inbuf = entrylist[p]->d_name;
                 char outbuf[255];
                 code_convert("utf-8","gb2312",inbuf,inlen,outbuf,outlen);
-                curl = strlen(outbuf);
-                if (curl > maxlen)
-                    maxlen = curl;
+                curl = strlen(outbuf) + 2;
+                if (curl > maxlen[i])
+                    maxlen[i] = curl;
             }
         }
-        maxlen += 2;
-        for (int j = 0;j < row;j++)
+        if (i > 0)
+            maxlen[i] += maxlen[i - 1];
+    }
+    for (int i = 0;i < row;i++)
+    {
+        for (int j = 0;j < col;j++)
         {
-            p = i * row + j;
+            p = j * row + i;
             if (p >= n)
                 break;
             else
             {
-                if (total > 0)
-                    printf("\033[%dC",total);
-                printf("%s",entrylist[p]->d_name);
-                if (i < col - 1)
-                    printf("  ");
-                printf("\n");
+               if (j > 0)
+                    printf("\033[%dC",maxlen[j - 1]);
+                printf("%s  \n",entrylist[p]->d_name);
             }
+            if (j < col - 1)
+                printf("\033[%dA",1);
         }
-        total += maxlen;
-        printf("\033[%dA",row);
     }
-    printf("\033[%dB\n",row * 2 - n % row - 1);
+//    printf("\033[%dB\n",row * 2 - n % row - 1);
 }
 
 void do_stat(struct dirent **entrylist,int index)
@@ -305,9 +307,11 @@ void do_ls(char *dirname,int mode)
             {
                 if (index >= size)
                 {
-                    tmplist = (struct dirent **)malloc(sizeof(struct dirent *) * size * 2);
+                    size *= 2;
+                    tmplist = (struct dirent **)malloc(sizeof(struct dirent *) * size);
                     for (int i = 0;i < index;i++)
                         tmplist[i] = entrylist[i];
+                    entrylist = (struct dirent **)malloc(sizeof(struct dirent *) * size);
                     entrylist = tmplist;
                 }
                 entrylist[index++] = direntp;
