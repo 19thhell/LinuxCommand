@@ -291,7 +291,65 @@ void do_ls(char *dirname,int mode)
     int index,size,length,minlen,maxlen;
 
 	if ((dir_ptr = opendir(dirname)) == NULL)
-		fprintf(stderr,"ls2: cannot open %s\n",dirname);
+    {
+        length = strlen(dirname);
+        int i,psize,fsize;
+        char *path,*file,*filename;
+        for (i = length - 1;i >= 0;i--)
+            if (dirname[i] == '/')
+                if (i < length - 1)
+                    break;
+                else
+                {
+                    fprintf(stderr,"ls2: cannot open %s\n",dirname);
+                    return;
+                }
+        if (i > 0)
+        {
+            psize = i + 1;
+            fsize = length - 1 - i;
+            path = (char *)malloc(sizeof(char) * psize); 
+            file = (char *)malloc(sizeof(char) * fsize); 
+            filename = dirname + i + 1;
+            memcpy(path,dirname,psize);
+            memcpy(file,filename,fsize);
+        }
+        else
+        {
+            path = (char *)malloc(sizeof(char));
+            path[0] = '.';
+            file = dirname;
+        }
+        if (file[0] == '.')
+            return;
+        if ((dir_ptr = opendir(path)) == NULL)
+            fprintf(stderr,"ls2: cannot open %s\n",dirname);
+        else
+        {
+            while ((direntp = readdir(dir_ptr)) != NULL)
+            {
+                if (strcmp(direntp->d_name,file) == 0)
+                {
+                    entrylist = (struct dirent **)malloc(sizeof(struct dirent *));
+                    entrylist[0] = direntp;
+                    break;
+                }
+            }
+            index = 1;
+            minlen = fsize;
+            if (mode == 0)
+            {
+                print_list(entrylist,index,get_row(entrylist,index,minlen));
+            }
+            else
+            {
+                chdir(path);
+                do_stat(entrylist,index);
+            }
+            closedir(dir_ptr);
+        }
+        return;
+    }
 	else
 	{
         size = 100;
