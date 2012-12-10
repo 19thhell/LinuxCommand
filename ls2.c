@@ -1,10 +1,14 @@
 #include	<sys/types.h>
+#include    <sys/ioctl.h>
 #include	<sys/stat.h>
+#include    <termios.h>
+#include	<strings.h>
 #include	<string.h>
 #include	<stdlib.h>
 #include    <unistd.h>
 #include	<dirent.h>
 #include    <getopt.h>
+#include    <iconv.h>
 #include	<stdio.h>
 #include	<errno.h>
 #include    <time.h>
@@ -33,7 +37,7 @@
 
 int dir_cmp(const void *a,const void *b)
 {
-    return strcmp((*(struct dirent **)a)->d_name,(*(struct dirent **)b)->d_name);
+    return strcasecmp((*(struct dirent **)a)->d_name,(*(struct dirent **)b)->d_name);
 }
 
 char *uid_to_name(short uid)
@@ -123,6 +127,116 @@ void show_file_info(char *filename,struct stat *info_p,int maxlink,int maxsize)
 	printf("%s \n",filename);			/* print name	 */
 }
 
+int code_convert(char *from_charset,char *to_charset,char *inbuf,int inlen,char *outbuf,int outlen)  
+{  
+        iconv_t cd; 
+        int rc;  
+        char **pin = &inbuf;  
+        char **pout = &outbuf;  
+  
+        cd = iconv_open(to_charset,from_charset);  
+        if (cd==0)  
+                return -1;  
+        memset(outbuf,0,outlen);  
+        if (iconv(cd,pin,&inlen,pout,&outlen) == -1)  
+                return -1;  
+        iconv_close(cd);  
+        return 0;  
+}  
+
+int get_row(struct dirent **entrylist,int n,int minlen)
+{
+    struct winsize ws;
+    ioctl(STDIN_FILENO,TIOCGWINSZ,&ws);
+    int ws_col = ws.ws_col,inlen,outlen,row,col,sum,flag,p,curl,maxlen;
+    for (row = 1;row <= n;row++)
+    {
+        col = (n - 1) / row + 1;
+        flag = 0;
+        sum = 0;
+        for (int i = 0;i < col;i++)
+        {
+            maxlen = 0;
+            for (int j = 0;j < row;j++)
+            {
+                p = i * row + j;
+                if (p >= n)
+                    break;
+                else
+                {
+                    inlen = strlen(entrylist[p]->d_name);
+                    outlen = 255;
+                    char *inbuf = entrylist[p]->d_name;
+                    char outbuf[255];
+                    code_convert("utf-8","gb2312",inbuf,inlen,outbuf,outlen);
+                    curl = strlen(outbuf) + 2;
+                    if (curl > maxlen)
+                        maxlen = curl;
+                }
+            }
+            sum += maxlen;
+            if (sum >= ws_col)
+            {
+                flag = 0;
+                break;
+            }
+            else
+            {
+                flag = 1;
+            }
+        }
+        if (flag == 1)
+            break;
+    }
+    return row;
+}
+
+void print_list(struct dirent **entrylist,int n,int row)
+{
+    int col = (n - 1) / row + 1,total = 0,curl,maxlen,inlen,outlen,p;
+    for (int i = 0;i < col;i++)
+    {
+        curl = 0;
+        maxlen = 0;
+        for (int j = 0;j < row;j++)
+        {
+            p = i * row + j;
+            if (p >= n)
+                break;
+            else
+            {
+                inlen = strlen(entrylist[p]->d_name);
+                outlen = 255;
+                char *inbuf = entrylist[p]->d_name;
+                char outbuf[255];
+                code_convert("utf-8","gb2312",inbuf,inlen,outbuf,outlen);
+                curl = strlen(outbuf);
+                if (curl > maxlen)
+                    maxlen = curl;
+            }
+        }
+        maxlen += 2;
+        for (int j = 0;j < row;j++)
+        {
+            p = i * row + j;
+            if (p >= n)
+                break;
+            else
+            {
+                if (total > 0)
+                    printf("\033[%dC",total);
+                printf("%s",entrylist[p]->d_name);
+                if (i < col - 1)
+                    printf("  ");
+                printf("\n");
+            }
+        }
+        total += maxlen;
+        printf("\033[%dA",row);
+    }
+    printf("\033[%dB\n",row * 2 - n % row - 1);
+}
+
 void do_stat(struct dirent **entrylist,int index)
 {
     long maxlink = 0,maxsize = 0,curl = 0,curs = 0;
@@ -172,7 +286,7 @@ void do_ls(char *dirname,int mode)
 {
 	DIR *dir_ptr;		/* the directory */
 	struct dirent *direntp,**entrylist,**tmplist;		/* each entry	 */
-    int index,size;
+    int index,size,length,minlen,maxlen;
 
 	if ((dir_ptr = opendir(dirname)) == NULL)
 		fprintf(stderr,"ls2: cannot open %s\n",dirname);
@@ -180,6 +294,8 @@ void do_ls(char *dirname,int mode)
 	{
         size = 100;
         index = 0;
+        minlen = 256;
+        maxlen = 0;
         entrylist = (struct dirent **)malloc(sizeof(struct dirent *) * size);
 		while ((direntp = readdir(dir_ptr)) != NULL)
         {
@@ -195,15 +311,17 @@ void do_ls(char *dirname,int mode)
                     entrylist = tmplist;
                 }
                 entrylist[index++] = direntp;
+                length = strlen(direntp->d_name);
+                if (length > maxlen)
+                    maxlen = length;
+                if (length < minlen)
+                    minlen = length;
             }
         }
         qsort(entrylist,index,sizeof(entrylist[0]),dir_cmp);
         if (mode == 0)
         {
-            for (int i = 0;i < index - 1;i++)
-                printf("%s  ",entrylist[i]->d_name);
-            if (index > 0)
-                printf("%s\n",entrylist[index - 1]->d_name);
+            print_list(entrylist,index,get_row(entrylist,index,minlen));
         }
         else
         {
