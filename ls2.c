@@ -123,7 +123,7 @@ void show_file_info(char *filename,struct stat *info_p,int maxlink,int maxsize)
 	printf("%s ",gid_to_name(info_p->st_gid));
 	printf("%*ld ",maxsize,(long)info_p->st_size);	/* size  */
 	printf("%d-%02d-%02d ",(mtime->tm_year) + 1900,(mtime->tm_mon) + 1,mtime->tm_mday);
-	printf("%02d:%02d ",mtime->tm_hour,mtime->tm_min);
+	printf("%02d:%02d ",mtime->tm_hour + 8,mtime->tm_min);
 	printf("%s \n",filename);			/* print name	 */
 }
 
@@ -148,9 +148,11 @@ int get_row(struct dirent **entrylist,int n,int minlen)
 {
     struct winsize ws;
     ioctl(STDIN_FILENO,TIOCGWINSZ,&ws);
-    int ws_col = ws.ws_col,inlen,outlen,row,col,sum,flag,p,curl,maxlen;
+    int ws_col = ws.ws_col,ws_row = ws.ws_row,inlen,outlen,row,col,sum,flag,p,curl,maxlen;
     for (row = 1;row <= n;row++)
     {
+        if (row - n % row > 1)
+            continue;
         col = (n - 1) / row + 1;
         flag = 0;
         sum = 0;
@@ -175,7 +177,7 @@ int get_row(struct dirent **entrylist,int n,int minlen)
                 }
             }
             sum += maxlen;
-            if (sum >= ws_col)
+            if (sum > ws_col)
             {
                 flag = 0;
                 break;
@@ -232,11 +234,10 @@ void print_list(struct dirent **entrylist,int n,int row)
                     printf("\033[%dC",maxlen[j - 1]);
                 printf("%s  \n",entrylist[p]->d_name);
             }
-            if (j < col - 1)
-                printf("\033[%dA",1);
+            printf("\033[%dA",1);
         }
+        printf("\033[%dB",1);
     }
-//    printf("\033[%dB\n",row * 2 - n % row - 1);
 }
 
 void do_stat(struct dirent **entrylist,int index)
