@@ -1,17 +1,17 @@
 #include	<sys/types.h>
-#include    <sys/ioctl.h>
+#include	<sys/ioctl.h>
 #include	<sys/stat.h>
-#include    <termios.h>
+#include	<termios.h>
 #include	<strings.h>
 #include	<string.h>
 #include	<stdlib.h>
-#include    <unistd.h>
+#include	<unistd.h>
 #include	<dirent.h>
-#include    <getopt.h>
-#include    <iconv.h>
+#include	<getopt.h>
+#include	<iconv.h>
 #include	<stdio.h>
 #include	<errno.h>
-#include    <time.h>
+#include	<time.h>
 #include	<pwd.h>
 #include	<grp.h>
 /**
